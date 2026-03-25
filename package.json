@@ -19,30 +19,25 @@
 
   "build": {
     "appId": "com.radcolour.radboardcompanion",
-    "productName": "Radboard Companion",
     "files": [
-      "dist/**/*",
-      "node_modules/**/*",
-      "package.json",
-      "main.js",
-      "preload.js",
-      "index.html",
-      "assets/**/*"
+      "**/*",
+      "!dist${/*}",
+      "!dist_electron${/*}",
+      "!build${/*}",
+      "!src-tauri${/*}",
+      "!node_modules${/*}"
     ],
-
+    "asar": true,
     "mac": {
       "target": "dmg",
       "icon": "build/icon.icns"
     },
-
     "win": {
       "icon": "build/icon.ico"
     },
-
     "linux": {
       "icon": "build/icon.png"
     },
-
     "dmg": {
       "background": "build/dmg-background.png",
       "iconSize": 128,
