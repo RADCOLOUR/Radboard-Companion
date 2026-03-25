@@ -18,16 +18,19 @@
   },
 
   "build": {
-    "appId": "com.radcolour.radboardcompanion",
-    "files": [
-      "**/*",
-      "!dist${/*}",
-      "!dist_electron${/*}",
-      "!build${/*}",
-      "!src-tauri${/*}",
-      "!node_modules${/*}"
-    ],
+  "appId": "com.radcolour.radboardcompanion",
+  "productName": "Radboard Companion",
+  "files": [
+    "main.js",
+    "index.html",
+    "preload.js",
+    "renderer.js",
+    "styles.css",
+    "assets/**/*",
+    "package.json"
+  ],
     "asar": true,
+    
     "mac": {
       "target": "dmg",
       "icon": "build/icon.icns"
