@@ -20,6 +20,15 @@
   "build": {
     "appId": "com.radcolour.radboardcompanion",
     "productName": "Radboard Companion",
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*",
+      "package.json",
+      "main.js",
+      "preload.js",
+      "index.html",
+      "assets/**/*"
+    ],
 
     "mac": {
       "target": "dmg",
