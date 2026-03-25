@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Radboard Desktop</title>
+    <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+
+    <div id="titlebar">
+        <div id="titlebar-left">
+            <span id="app-title">Radboard Desktop</span>
+        </div>
+        <div id="titlebar-tabs">
+            <button class="tab active" data-tab="projects">Projects</button>
+            <button class="tab" data-tab="chordpack">Chord Pack Editor</button>
+        </div>
+        <div id="titlebar-right"></div>
+    </div>
+
+    <div id="content">
+        <div id="tab-projects" class="tab-panel active"></div>
+        <div id="tab-chordpack" class="tab-panel"></div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>

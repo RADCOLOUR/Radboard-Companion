@@ -1,0 +1,197 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+:root {
+    --background: #000000;
+    --surface: #1A1A1A;
+    --surface-variant: #2B2B2B;
+    --outline: #333333;
+    --primary: #FFB3D9;
+    --secondary: #FFE57A;
+    --tertiary: #7DD6FF;
+    --positive: #BFFFAA;
+    --error: #FF5449;
+    --on-background: #E6E6E6;
+    --on-surface-variant: #8A8A8A;
+}
+
+body {
+    background: var(--background);
+    color: var(--on-background);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#titlebar {
+    height: 48px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--outline);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    -webkit-app-region: drag;
+    flex-shrink: 0;
+}
+
+#titlebar-left {
+    width: 200px;
+}
+
+#app-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--on-background);
+}
+
+#titlebar-tabs {
+    display: flex;
+    gap: 4px;
+    -webkit-app-region: no-drag;
+}
+
+#titlebar-right {
+    width: 200px;
+}
+
+.tab {
+    background: transparent;
+    border: none;
+    color: var(--on-surface-variant);
+    font-size: 12px;
+    padding: 6px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    -webkit-app-region: no-drag;
+}
+
+.tab:hover {
+    background: var(--surface-variant);
+    color: var(--on-background);
+}
+
+.tab.active {
+    background: var(--surface-variant);
+    color: var(--tertiary);
+    font-weight: 600;
+}
+
+#content {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+}
+
+.tab-panel {
+    display: none;
+    flex: 1;
+    overflow: hidden;
+}
+
+.tab-panel.active {
+    display: flex;
+}
+
+/* Cards */
+.card {
+    background: var(--surface);
+    border-radius: 12px;
+    border: 1px solid var(--outline);
+    overflow: hidden;
+}
+
+.card-header {
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--outline);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}
+
+.card-header.green { color: var(--positive); border-left: 3px solid var(--positive); }
+.card-header.blue { color: var(--tertiary); border-left: 3px solid var(--tertiary); }
+.card-header.pink { color: var(--primary); border-left: 3px solid var(--primary); }
+.card-header.yellow { color: var(--secondary); border-left: 3px solid var(--secondary); }
+
+.card-body {
+    padding: 16px;
+}
+
+/* Buttons */
+.btn {
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.btn:hover { opacity: 0.85; }
+.btn:active { opacity: 0.7; }
+
+.btn-primary { background: var(--primary); color: #000; font-weight: 600; }
+.btn-secondary { background: var(--secondary); color: #000; font-weight: 600; }
+.btn-positive { background: var(--positive); color: #000; font-weight: 600; }
+.btn-tertiary { background: var(--tertiary); color: #000; font-weight: 600; }
+.btn-ghost { background: var(--surface-variant); color: var(--on-background); }
+.btn-danger { background: transparent; color: var(--error); border: 1px solid var(--error); }
+
+/* Inputs */
+input, textarea, select {
+    background: var(--surface-variant);
+    border: 1px solid var(--outline);
+    border-radius: 6px;
+    color: var(--on-background);
+    font-size: 12px;
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+    font-family: inherit;
+}
+
+input:focus, textarea:focus, select:focus {
+    border-color: var(--tertiary);
+}
+
+input::placeholder, textarea::placeholder {
+    color: var(--on-surface-variant);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-variant); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--outline); }
+
+/* Empty state */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 48px;
+    color: var(--on-surface-variant);
+    text-align: center;
+}
+
+.empty-state-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--on-background);
+}
+
+.empty-state-subtitle {
+    font-size: 11px;
+    line-height: 1.5;
+}

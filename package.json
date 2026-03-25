@@ -1,0 +1,52 @@
+{
+  "name": "radboard-companion",
+  "version": "1.0.0",
+  "description": "Radboard Companion — Chord Pack Editor and Project Manager",
+  "main": "main.js",
+
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+
+  "devDependencies": {
+    "electron": "^41.0.3",
+    "electron-builder": "^26.8.1"
+  },
+
+  "build": {
+    "appId": "com.radcolour.radboardcompanion",
+    "productName": "Radboard Companion",
+
+    "mac": {
+      "target": "dmg",
+      "icon": "build/icon.icns"
+    },
+
+    "win": {
+      "icon": "build/icon.ico"
+    },
+
+    "linux": {
+      "icon": "build/icon.png"
+    },
+
+    "dmg": {
+      "background": "build/dmg-background.png",
+      "iconSize": 128,
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        { "x": 130, "y": 220 },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  }
+}
