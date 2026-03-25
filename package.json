@@ -4,9 +4,12 @@
   "description": "Radboard Companion — Chord Pack Editor and Project Manager",
   "main": "main.js",
 
-  "scripts": {
+"scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "build": "electron-builder -wml",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
   },
 
   "devDependencies": {
