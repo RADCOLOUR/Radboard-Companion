@@ -5,6 +5,7 @@ const path = require('path')
 let currentFolderPath = null
 let packChords = []
 let selectedChordIndex = -1
+let searchQuery = ''
 
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -29,6 +30,9 @@ function loadProjectsPanel() {
             <div style="padding:8px;border-bottom:1px solid var(--outline);display:flex;gap:8px;">
                 <button class="btn btn-positive" id="btnNewProject" style="flex:1;">+ New Project</button>
             </div>
+            <div style="padding:8px;border-bottom:1px solid var(--outline);">
+                <input id="projectSearch" type="text" placeholder="Search projects..." style="width:100%;"/>
+            </div>
             <div id="projectList" style="flex:1;overflow-y:auto;padding:8px;"></div>
         </div>
         <div id="projectDetail" style="flex:1;overflow-y:auto;padding:16px;"></div>
@@ -36,6 +40,10 @@ function loadProjectsPanel() {
 
     document.getElementById('btnOpenFolder').addEventListener('click', openProjectFolder)
     document.getElementById('btnNewProject').addEventListener('click', createNewProject)
+    document.getElementById('projectSearch').addEventListener('input', e => {
+        searchQuery = e.target.value.toLowerCase()
+        renderProjectList()
+    })
     showProjectEmptyState()
 }
 
@@ -143,49 +151,58 @@ function showPickFolderFirst() {
     detail.innerHTML = `
         <div class="empty-state" style="height:100%;">
             <div class="empty-state-title">No folder open</div>
-            <div class="empty-state-subtitle">Tap "Open Folder" first to choose where your projects are saved, then tap "+ New Project" to create one.</div>
+            <div class="empty-state-subtitle">Click "Open Folder" first to choose where your projects are saved, then click "+ New Project" to create one.</div>
         </div>
     `
 }
 
-function scanProjectFolder(folderPath) {
-    const list = document.getElementById('projectList')
-    list.innerHTML = ''
+let allProjects = []
 
+function scanProjectFolder(folderPath) {
     try {
         const entries = fs.readdirSync(folderPath, { withFileTypes: true })
-        const projects = entries.filter(e => e.isDirectory())
+        allProjects = entries.filter(e => e.isDirectory()).map(e => e.name)
+        renderProjectList()
 
-        if (projects.length === 0) {
-            list.innerHTML = `<div class="empty-state"><span class="empty-state-subtitle">No projects found in this folder</span></div>`
-            return
+        if (allProjects.length > 0) {
+            const first = allProjects[0]
+            loadProjectDetail(path.join(folderPath, first), first)
         }
-
-        projects.forEach(proj => {
-            const projPath = path.join(folderPath, proj.name)
-            const btn = document.createElement('div')
-            btn.style.cssText = `
-                padding: 10px 12px;
-                border-radius: 8px;
-                cursor: pointer;
-                margin-bottom: 4px;
-                font-size: 12px;
-                color: var(--on-background);
-                transition: background 0.15s;
-            `
-            btn.textContent = proj.name
-            btn.addEventListener('mouseenter', () => btn.style.background = 'var(--surface-variant)')
-            btn.addEventListener('mouseleave', () => btn.style.background = 'transparent')
-            btn.addEventListener('click', () => loadProjectDetail(projPath, proj.name))
-            list.appendChild(btn)
-        })
-
-        const first = projects[0]
-        loadProjectDetail(path.join(folderPath, first.name), first.name)
-
     } catch (e) {
-        list.innerHTML = `<div class="empty-state"><span class="empty-state-subtitle">Could not read folder</span></div>`
+        document.getElementById('projectList').innerHTML = `<div class="empty-state"><span class="empty-state-subtitle">Could not read folder</span></div>`
     }
+}
+
+function renderProjectList() {
+    const list = document.getElementById('projectList')
+    if (!list) return
+    list.innerHTML = ''
+
+    const filtered = allProjects.filter(p => p.toLowerCase().includes(searchQuery))
+
+    if (filtered.length === 0) {
+        list.innerHTML = `<div class="empty-state"><span class="empty-state-subtitle">${searchQuery ? 'No projects match your search' : 'No projects found in this folder'}</span></div>`
+        return
+    }
+
+    filtered.forEach(projName => {
+        const projPath = path.join(currentFolderPath, projName)
+        const btn = document.createElement('div')
+        btn.style.cssText = `
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 4px;
+            font-size: 12px;
+            color: var(--on-background);
+            transition: background 0.15s;
+        `
+        btn.textContent = projName
+        btn.addEventListener('mouseenter', () => btn.style.background = 'var(--surface-variant)')
+        btn.addEventListener('mouseleave', () => btn.style.background = 'transparent')
+        btn.addEventListener('click', () => loadProjectDetail(projPath, projName))
+        list.appendChild(btn)
+    })
 }
 
 function loadProjectDetail(projPath, projName) {
@@ -280,16 +297,40 @@ function loadProjectDetail(projPath, projName) {
             </div>
 
             <div class="card">
-                <div class="card-header blue">Notes</div>
-                <div class="card-body">
-                    ${notes
-                        ? `<pre style="font-size:11px;line-height:1.8;color:var(--on-background);white-space:pre-wrap;">${notes}</pre>`
-                        : `<span style="font-size:11px;color:var(--on-surface-variant);">No notes</span>`
-                    }
+                <div class="card-header blue" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span>Notes</span>
+                    <button class="btn btn-ghost" id="btnSaveNotes" style="padding:4px 10px;font-size:10px;display:none;">Save</button>
+                </div>
+                <div class="card-body" style="padding:0;">
+                    <textarea id="notesEditor" style="
+                        width:100%;
+                        min-height:160px;
+                        background:transparent;
+                        border:none;
+                        color:var(--on-background);
+                        font-size:12px;
+                        line-height:1.6;
+                        padding:16px;
+                        resize:vertical;
+                        font-family:inherit;
+                        outline:none;
+                    ">${notes}</textarea>
                 </div>
             </div>
         </div>
     `
+
+    const notesEditor = document.getElementById('notesEditor')
+    const btnSaveNotes = document.getElementById('btnSaveNotes')
+
+    notesEditor.addEventListener('input', () => {
+        btnSaveNotes.style.display = 'block'
+    })
+
+    btnSaveNotes.addEventListener('click', () => {
+        fs.writeFileSync(notesPath, notesEditor.value)
+        btnSaveNotes.style.display = 'none'
+    })
 
     document.getElementById('btnEditInfo').addEventListener('click', () => {
         showEditInfoDialog(projPath, projName, info, () => loadProjectDetail(projPath, projName))
@@ -328,8 +369,9 @@ function showDeleteProjectDialog(projPath, projName) {
 
     document.getElementById('btnConfirmDelete').addEventListener('click', () => {
         fs.rmSync(projPath, { recursive: true, force: true })
+        allProjects = allProjects.filter(p => p !== projName)
         overlay.remove()
-        scanProjectFolder(currentFolderPath)
+        renderProjectList()
         showProjectEmptyState()
     })
 }
@@ -416,6 +458,165 @@ function formatTime(totalSeconds) {
     const minutes = Math.floor((totalSeconds % 3600) / 60)
     const seconds = totalSeconds % 60
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+function parseTabNotation(tabString) {
+    if (!tabString || tabString.trim() === '') return null
+
+    const parts = tabString.trim().split(/\s+/)
+    const tab = parts[0]
+    let startFret = 1
+    let barreFret = -1
+    let barreFrom = -1
+    let barreTo = -1
+
+    parts.forEach(part => {
+        if (part.startsWith('@')) {
+            startFret = parseInt(part.substring(1)) || 1
+        } else if (part.includes('@')) {
+            const atIdx = part.indexOf('@')
+            startFret = parseInt(part.substring(atIdx + 1)) || 1
+        }
+        if (part.startsWith('barre:')) {
+            const range = part.substring(6).split('-')
+            barreFrom = parseInt(range[0])
+            barreTo = parseInt(range[1])
+            barreFret = startFret
+        }
+    })
+
+    const tabStr = tab.includes('@') ? tab.substring(0, tab.indexOf('@')) : tab
+
+    return {
+        strings: tabStr.split('').map(c => {
+            if (c === 'x') return -1
+            if (c === '0') return 0
+            return parseInt(c) || 0
+        }),
+        startFret,
+        barreFret,
+        barreFrom,
+        barreTo
+    }
+}
+
+function drawFretboard(canvas, tabString) {
+    const ctx = canvas.getContext('2d')
+    const W = canvas.width
+    const H = canvas.height
+
+    ctx.clearRect(0, 0, W, H)
+    ctx.fillStyle = '#1A1A1A'
+    ctx.fillRect(0, 0, W, H)
+
+    const parsed = parseTabNotation(tabString)
+    const numStrings = 6
+    const numFrets = 5
+
+    const paddingTop = 32
+    const paddingBottom = 20
+    const paddingLeft = 28
+    const paddingRight = 20
+
+    const fretboardW = W - paddingLeft - paddingRight
+    const fretboardH = H - paddingTop - paddingBottom
+
+    const stringSpacing = fretboardW / (numStrings - 1)
+    const fretSpacing = fretboardH / numFrets
+
+    const startFret = parsed ? parsed.startFret : 1
+
+    ctx.strokeStyle = '#444444'
+    ctx.lineWidth = 1
+
+    for (let f = 0; f <= numFrets; f++) {
+        const y = paddingTop + f * fretSpacing
+        ctx.beginPath()
+        ctx.moveTo(paddingLeft, y)
+        ctx.lineTo(W - paddingRight, y)
+        ctx.stroke()
+    }
+
+    for (let s = 0; s < numStrings; s++) {
+        const x = paddingLeft + s * stringSpacing
+        ctx.beginPath()
+        ctx.moveTo(x, paddingTop)
+        ctx.lineTo(x, paddingTop + fretboardH)
+        ctx.stroke()
+    }
+
+    ctx.fillStyle = '#7DD6FF'
+    ctx.lineWidth = 3
+    ctx.beginPath()
+    ctx.moveTo(paddingLeft, paddingTop)
+    ctx.lineTo(W - paddingRight, paddingTop)
+    ctx.stroke()
+
+    if (startFret > 1) {
+        ctx.fillStyle = '#8A8A8A'
+        ctx.font = '10px sans-serif'
+        ctx.textAlign = 'left'
+        ctx.fillText(`${startFret}fr`, 2, paddingTop + fretSpacing * 0.6)
+    }
+
+    if (!parsed) return
+
+    if (parsed.barreFret >= 0 && parsed.barreFrom >= 0 && parsed.barreTo >= 0) {
+        const barreY = paddingTop + fretSpacing * 0.5
+        const barreX1 = paddingLeft + parsed.barreFrom * stringSpacing
+        const barreX2 = paddingLeft + parsed.barreTo * stringSpacing
+        const barreRadius = fretSpacing * 0.28
+
+        ctx.fillStyle = '#7DD6FF'
+        ctx.beginPath()
+        ctx.roundRect(barreX1 - barreRadius, barreY - barreRadius, barreX2 - barreX1 + barreRadius * 2, barreRadius * 2, barreRadius)
+        ctx.fill()
+    }
+
+    const dotRadius = fretSpacing * 0.28
+
+    parsed.strings.forEach((fret, i) => {
+        const x = paddingLeft + i * stringSpacing
+
+        if (fret === -1) {
+            ctx.strokeStyle = '#FF5449'
+            ctx.lineWidth = 1.5
+            const r = 5
+            const y = paddingTop - 14
+            ctx.beginPath()
+            ctx.moveTo(x - r, y - r)
+            ctx.lineTo(x + r, y + r)
+            ctx.moveTo(x + r, y - r)
+            ctx.lineTo(x - r, y + r)
+            ctx.stroke()
+            return
+        }
+
+        if (fret === 0) {
+            ctx.strokeStyle = '#7DD6FF'
+            ctx.lineWidth = 1.5
+            ctx.beginPath()
+            ctx.arc(x, paddingTop - 14, 5, 0, Math.PI * 2)
+            ctx.stroke()
+            return
+        }
+
+        const y = paddingTop + (fret - 0.5) * fretSpacing
+
+        const isOnBarre = parsed.barreFrom >= 0 && i >= parsed.barreFrom && i <= parsed.barreTo && fret === 1
+        if (isOnBarre) return
+
+        ctx.fillStyle = '#FFB3D9'
+        ctx.beginPath()
+        ctx.arc(x, y, dotRadius, 0, Math.PI * 2)
+        ctx.fill()
+
+        ctx.fillStyle = '#000000'
+        ctx.font = `bold ${Math.floor(dotRadius * 0.9)}px sans-serif`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(fret.toString(), x, y)
+    })
 }
 
 function loadChordPackPanel() {
@@ -595,68 +796,131 @@ function renderChordEditor(index) {
     const editor = document.getElementById('chordEditor')
 
     editor.innerHTML = `
-        <div style="max-width:600px;">
-            <h3 style="font-size:14px;font-weight:700;color:var(--tertiary);margin-bottom:16px;">Edit Chord</h3>
+        <div style="display:flex;gap:16px;max-width:900px;">
 
-            <div class="card" style="margin-bottom:12px;">
-                <div class="card-header blue">Info</div>
-                <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
-                    <div>
-                        <label style="font-size:10px;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:0.1em;">Name</label>
-                        <input id="chordName" type="text" value="${chord.name}" style="width:100%;margin-top:4px;"/>
-                    </div>
-                    <div>
-                        <label style="font-size:10px;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:0.1em;">Description</label>
-                        <input id="chordDesc" type="text" value="${chord.description}" style="width:100%;margin-top:4px;"/>
-                    </div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div style="flex:1;min-width:0;">
+                <h3 style="font-size:14px;font-weight:700;color:var(--tertiary);margin-bottom:16px;">Edit Chord</h3>
+
+                <div class="card" style="margin-bottom:12px;">
+                    <div class="card-header blue">Info</div>
+                    <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
                         <div>
-                            <label style="font-size:10px;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:0.1em;">Root</label>
-                            <input id="chordRoot" type="text" value="${chord.root}" placeholder="e.g. C, F#" style="width:100%;margin-top:4px;"/>
+                            <label style="font-size:10px;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:0.1em;">Name</label>
+                            <input id="chordName" type="text" value="${chord.name}" style="width:100%;margin-top:4px;"/>
                         </div>
                         <div>
-                            <label style="font-size:10px;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:0.1em;">Type</label>
-                            <input id="chordType" type="text" value="${chord.type}" placeholder="e.g. Major, Minor" style="width:100%;margin-top:4px;"/>
+                            <label style="font-size:10px;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:0.1em;">Description</label>
+                            <input id="chordDesc" type="text" value="${chord.description}" style="width:100%;margin-top:4px;"/>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                            <div>
+                                <label style="font-size:10px;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:0.1em;">Root</label>
+                                <input id="chordRoot" type="text" value="${chord.root}" placeholder="e.g. C, F#" style="width:100%;margin-top:4px;"/>
+                            </div>
+                            <div>
+                                <label style="font-size:10px;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:0.1em;">Type</label>
+                                <input id="chordType" type="text" value="${chord.type}" placeholder="e.g. Major, Minor" style="width:100%;margin-top:4px;"/>
+                            </div>
                         </div>
                     </div>
                 </div>
+
+                <div class="card" style="margin-bottom:12px;">
+                    <div class="card-header blue">Guitar Positions</div>
+                    <div class="card-body" style="display:flex;flex-direction:column;gap:8px;" id="guitarPositions">
+                        ${chord.guitarPositions.map((pos, i) => `
+                            <div style="display:flex;gap:8px;align-items:center;">
+                                <input class="guitar-pos" type="text" value="${pos}" placeholder="e.g. x32010 or 133211@1 barre:0-5" style="flex:1;font-family:monospace;" data-pos-index="${i}"/>
+                                <button class="btn btn-ghost" onclick="removePosition('guitar', ${i})" style="padding:6px 10px;">✕</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div style="padding:8px 16px;">
+                        <button class="btn btn-ghost" onclick="addPosition('guitar')" style="font-size:11px;">+ Add Position</button>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom:16px;">
+                    <div class="card-header blue">Bass Positions</div>
+                    <div class="card-body" style="display:flex;flex-direction:column;gap:8px;" id="bassPositions">
+                        ${chord.bassPositions.map((pos, i) => `
+                            <div style="display:flex;gap:8px;align-items:center;">
+                                <input class="bass-pos" type="text" value="${pos}" placeholder="e.g. x321 or 1332@1 barre:0-3" style="flex:1;font-family:monospace;"/>
+                                <button class="btn btn-ghost" onclick="removePosition('bass', ${i})" style="padding:6px 10px;">✕</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div style="padding:8px 16px;">
+                        <button class="btn btn-ghost" onclick="addPosition('bass')" style="font-size:11px;">+ Add Position</button>
+                    </div>
+                </div>
+
+                <button class="btn btn-tertiary" id="btnSaveChord" style="width:100%;">Save Chord</button>
             </div>
 
-            <div class="card" style="margin-bottom:12px;">
-                <div class="card-header blue">Guitar Positions</div>
-                <div class="card-body" style="display:flex;flex-direction:column;gap:8px;" id="guitarPositions">
-                    ${chord.guitarPositions.map((pos, i) => `
-                        <div style="display:flex;gap:8px;align-items:center;">
-                            <input class="guitar-pos" type="text" value="${pos}" placeholder="e.g. x32010 or 133211@1 barre:0-5" style="flex:1;font-family:monospace;"/>
-                            <button class="btn btn-ghost" onclick="removePosition('guitar', ${i})" style="padding:6px 10px;">✕</button>
-                        </div>
-                    `).join('')}
+            <div style="width:220px;flex-shrink:0;">
+                <h3 style="font-size:14px;font-weight:700;color:var(--tertiary);margin-bottom:16px;">Preview</h3>
+                <div class="card" style="margin-bottom:8px;">
+                    <div class="card-header blue">Guitar</div>
+                    <div class="card-body" style="padding:8px;">
+                        <canvas id="fretboardCanvas" width="200" height="220" style="width:100%;display:block;border-radius:8px;"></canvas>
+                    </div>
                 </div>
-                <div style="padding:8px 16px;">
-                    <button class="btn btn-ghost" onclick="addPosition('guitar')" style="font-size:11px;">+ Add Position</button>
-                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;" id="previewPositionBtns"></div>
             </div>
 
-            <div class="card" style="margin-bottom:16px;">
-                <div class="card-header blue">Bass Positions</div>
-                <div class="card-body" style="display:flex;flex-direction:column;gap:8px;" id="bassPositions">
-                    ${chord.bassPositions.map((pos, i) => `
-                        <div style="display:flex;gap:8px;align-items:center;">
-                            <input class="bass-pos" type="text" value="${pos}" placeholder="e.g. x321 or 1332@1 barre:0-3" style="flex:1;font-family:monospace;"/>
-                            <button class="btn btn-ghost" onclick="removePosition('bass', ${i})" style="padding:6px 10px;">✕</button>
-                        </div>
-                    `).join('')}
-                </div>
-                <div style="padding:8px 16px;">
-                    <button class="btn btn-ghost" onclick="addPosition('bass')" style="font-size:11px;">+ Add Position</button>
-                </div>
-            </div>
-
-            <button class="btn btn-tertiary" id="btnSaveChord" style="width:100%;">Save Chord</button>
         </div>
     `
 
     document.getElementById('btnSaveChord').addEventListener('click', () => saveChord(index))
+
+    const canvas = document.getElementById('fretboardCanvas')
+
+    const guitarInputs = document.querySelectorAll('.guitar-pos')
+
+    let activePreviewIndex = 0
+
+    function updatePreviewButtons() {
+        const btns = document.getElementById('previewPositionBtns')
+        if (!btns) return
+        btns.innerHTML = ''
+        const positions = Array.from(document.querySelectorAll('.guitar-pos')).map(i => i.value.trim())
+        positions.forEach((pos, i) => {
+            if (!pos) return
+            const btn = document.createElement('button')
+            btn.className = 'btn'
+            btn.style.cssText = `padding:4px 10px;font-size:10px;background:${i === activePreviewIndex ? 'var(--tertiary)' : 'var(--surface-variant)'};color:${i === activePreviewIndex ? '#000' : 'var(--on-background)'};`
+            btn.textContent = i === 0 ? 'Open' : `Pos ${i + 1}`
+            btn.addEventListener('click', () => {
+                activePreviewIndex = i
+                updatePreviewButtons()
+                const allInputs = Array.from(document.querySelectorAll('.guitar-pos'))
+                if (allInputs[i]) drawFretboard(canvas, allInputs[i].value)
+            })
+            btns.appendChild(btn)
+        })
+    }
+
+    guitarInputs.forEach((input, i) => {
+        input.addEventListener('input', () => {
+            activePreviewIndex = i
+            updatePreviewButtons()
+            drawFretboard(canvas, input.value)
+        })
+        input.addEventListener('focus', () => {
+            activePreviewIndex = i
+            updatePreviewButtons()
+            drawFretboard(canvas, input.value)
+        })
+    })
+
+    if (chord.guitarPositions.length > 0 && chord.guitarPositions[0]) {
+        drawFretboard(canvas, chord.guitarPositions[0])
+    } else {
+        drawFretboard(canvas, '')
+    }
+
+    updatePreviewButtons()
 }
 
 function saveChord(index) {
