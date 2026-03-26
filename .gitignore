@@ -8,7 +8,7 @@ release/
 .DS_Store
 thumbs.db
 node_modules/
-readme.md
+README.md
 .env
 dist-build/
 
