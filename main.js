@@ -3,6 +3,25 @@ const path = require('path')
 const fs = require('fs')
 const { exec } = require('child_process')
 
+function getAdbPath() {
+    const base = app.isPackaged
+        ? path.join(process.resourcesPath, 'adb')
+        : path.join(__dirname, 'resources', 'adb')
+
+    if (process.platform === 'win32') return path.join(base, 'win', 'adb.exe')
+    if (process.platform === 'darwin') return path.join(base, 'mac', 'adb')
+    return path.join(base, 'linux', 'adb')
+}
+
+function adb(command) {
+    const adbPath = getAdbPath()
+    return new Promise((resolve) => {
+        exec(`"${adbPath}" ${command}`, (err, stdout) => {
+            resolve({ err, stdout })
+        })
+    })
+}
+
 function createWindow() {
     const win = new BrowserWindow({
         width: 1200,
@@ -33,17 +52,12 @@ app.on('window-all-closed', () => {
 })
 
 ipcMain.handle('open-folder-dialog', async () => {
-    const result = await dialog.showOpenDialog({
-        properties: ['openDirectory']
-    })
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
     return result.filePaths
 })
 
 ipcMain.handle('open-file-dialog', async (event, filters) => {
-    const result = await dialog.showOpenDialog({
-        properties: ['openFile'],
-        filters: filters
-    })
+    const result = await dialog.showOpenDialog({ properties: ['openFile'], filters })
     return result.filePaths
 })
 
@@ -60,59 +74,40 @@ ipcMain.handle('save-file-dialog', async (event, content) => {
 })
 
 ipcMain.handle('adb-check-device', async () => {
-    return new Promise((resolve) => {
-        exec('adb devices', (err, stdout) => {
-            if (err) { resolve(false); return }
-            const lines = stdout.trim().split('\n').slice(1).filter(l => l.trim() && l.includes('device'))
-            resolve(lines.length > 0)
-        })
-    })
+    const { err, stdout } = await adb('devices')
+    if (err) return false
+    const lines = stdout.trim().split('\n').slice(1).filter(l => l.trim() && l.includes('device'))
+    return lines.length > 0
 })
 
 ipcMain.handle('adb-list-projects', async () => {
-    return new Promise((resolve) => {
-        exec('adb shell ls /sdcard/Documents/Radcolour/projects', (err, stdout) => {
-            if (err) { resolve([]); return }
-            const projects = stdout.trim().split('\n').map(l => l.trim()).filter(l => l.length > 0)
-            resolve(projects)
-        })
-    })
-})
-
-ipcMain.handle('adb-pull-file', async (event, devicePath, localPath) => {
-    return new Promise((resolve) => {
-        exec(`adb pull "${devicePath}" "${localPath}"`, (err) => {
-            resolve(!err)
-        })
-    })
-})
-
-ipcMain.handle('adb-push-file', async (event, localPath, devicePath) => {
-    return new Promise((resolve) => {
-        exec(`adb push "${localPath}" "${devicePath}"`, (err) => {
-            resolve(!err)
-        })
-    })
+    const { err, stdout } = await adb('shell ls /sdcard/Documents/Radcolour/projects')
+    if (err) return []
+    return stdout.trim().split('\n').map(l => l.trim()).filter(l => l.length > 0)
 })
 
 ipcMain.handle('adb-read-file', async (event, devicePath) => {
-    return new Promise((resolve) => {
-        exec(`adb shell cat "${devicePath}"`, (err, stdout) => {
-            if (err) { resolve(null); return }
-            resolve(stdout)
-        })
-    })
+    const { err, stdout } = await adb(`shell cat "${devicePath}"`)
+    if (err) return null
+    return stdout
 })
 
 ipcMain.handle('adb-write-file', async (event, devicePath, content) => {
-    return new Promise((resolve) => {
-        const tmp = path.join(app.getPath('temp'), 'radboard_tmp_' + Date.now() + '.txt')
-        fs.writeFileSync(tmp, content)
-        exec(`adb push "${tmp}" "${devicePath}"`, (err) => {
-            fs.unlinkSync(tmp)
-            resolve(!err)
-        })
-    })
+    const tmp = path.join(app.getPath('temp'), 'radboard_tmp_' + Date.now() + '.txt')
+    fs.writeFileSync(tmp, content)
+    const { err } = await adb(`push "${tmp}" "${devicePath}"`)
+    fs.unlinkSync(tmp)
+    return !err
+})
+
+ipcMain.handle('adb-pull-file', async (event, devicePath, localPath) => {
+    const { err } = await adb(`pull "${devicePath}" "${localPath}"`)
+    return !err
+})
+
+ipcMain.handle('adb-push-file', async (event, localPath, devicePath) => {
+    const { err } = await adb(`push "${localPath}" "${devicePath}"`)
+    return !err
 })
 
 ipcMain.handle('show-save-choice-dialog', async () => {

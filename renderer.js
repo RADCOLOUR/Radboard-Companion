@@ -23,6 +23,38 @@ loadProjectsPanel()
 loadChordPackPanel()
 startDevicePolling()
 
+function showToast(message, color = 'var(--positive)') {
+    const existing = document.getElementById('radToast')
+    if (existing) existing.remove()
+
+    const toast = document.createElement('div')
+    toast.id = 'radToast'
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--surface);
+        border: 1px solid ${color};
+        color: ${color};
+        padding: 10px 20px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        z-index: 9999;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        transition: opacity 0.3s;
+        opacity: 1;
+    `
+    toast.textContent = message
+    document.body.appendChild(toast)
+
+    setTimeout(() => {
+        toast.style.opacity = '0'
+        setTimeout(() => toast.remove(), 300)
+    }, 3000)
+}
+
 function startDevicePolling() {
     checkDevice()
     setInterval(checkDevice, 5000)
@@ -35,9 +67,12 @@ async function checkDevice() {
         deviceConnected = connected
         if (connected) {
             await refreshDeviceProjects()
+            showToast('📱 Radboard device connected')
+            updateDeviceIndicator(true)
         } else {
             deviceProjects = []
             renderProjectList()
+            showToast('Device disconnected', 'var(--error)')
             updateDeviceIndicator(false)
         }
     }
@@ -301,35 +336,15 @@ function renderProjectList() {
     }
 }
 
-    filtered.forEach(projName => {
-        const projPath = path.join(currentFolderPath, projName)
-        const btn = document.createElement('div')
-        btn.style.cssText = `
-            padding: 10px 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            margin-bottom: 4px;
-            font-size: 12px;
-            color: var(--on-background);
-            transition: background 0.15s;
-        `
-        btn.textContent = projName
-        btn.addEventListener('mouseenter', () => btn.style.background = 'var(--surface-variant)')
-        btn.addEventListener('mouseleave', () => btn.style.background = 'transparent')
-        btn.addEventListener('click', () => loadProjectDetail(projPath, projName))
-        list.appendChild(btn)
-    })
+function loadProjectDetail(projPath, projName) {
+    const detail = document.getElementById('projectDetail')
 
+    const infoPath = path.join(projPath, 'info.txt')
+    const notesPath = path.join(projPath, 'notes.txt')
+    const progressionPath = path.join(projPath, 'progression.txt')
 
-    function loadProjectDetail(projPath, projName) {
-      const detail = document.getElementById('projectDetail')
-
-      const infoPath = path.join(projPath, 'info.txt')
-      const notesPath = path.join(projPath, 'notes.txt')
-      const progressionPath = path.join(projPath, 'progression.txt')
-
-      const info = {}
-      if (fs.existsSync(infoPath)) {
+    const info = {}
+    if (fs.existsSync(infoPath)) {
         fs.readFileSync(infoPath, 'utf8').split('\n').forEach(line => {
             const idx = line.indexOf('=')
             if (idx >= 0) {
@@ -338,9 +353,7 @@ function renderProjectList() {
         })
     }
 
-    const notes = fs.existsSync(notesPath)
-        ? fs.readFileSync(notesPath, 'utf8')
-        : ''
+    const notes = fs.existsSync(notesPath) ? fs.readFileSync(notesPath, 'utf8') : ''
 
     let progressionText = ''
     if (fs.existsSync(progressionPath)) {
@@ -454,6 +467,149 @@ function renderProjectList() {
 
     document.getElementById('btnDeleteProject').addEventListener('click', () => {
         showDeleteProjectDialog(projPath, projName)
+    })
+}
+
+async function loadDeviceProjectDetail(projName) {
+    const detail = document.getElementById('projectDetail')
+    const basePath = `${DEVICE_PROJECTS_PATH}/${projName}`
+
+    detail.innerHTML = `<div class="empty-state"><span class="empty-state-subtitle">Loading from device...</span></div>`
+
+    const infoRaw = await ipcRenderer.invoke('adb-read-file', `${basePath}/info.txt`)
+    const notesRaw = await ipcRenderer.invoke('adb-read-file', `${basePath}/notes.txt`)
+    const progressionRaw = await ipcRenderer.invoke('adb-read-file', `${basePath}/progression.txt`)
+
+    const info = {}
+    if (infoRaw) {
+        infoRaw.split('\n').forEach(line => {
+            const idx = line.indexOf('=')
+            if (idx >= 0) info[line.substring(0, idx).trim()] = line.substring(idx + 1).trim()
+        })
+    }
+
+    const notes = notesRaw || ''
+
+    let progressionText = ''
+    if (progressionRaw) {
+        try {
+            const sections = JSON.parse(progressionRaw)
+            progressionText = sections.map(s =>
+                `${s.name}: ${s.chords.length > 0 ? s.chords.join(' → ') : 'No chords'}`
+            ).join('\n')
+        } catch (e) {
+            progressionText = 'Could not read progression'
+        }
+    }
+
+    const timeSpent = info.time_spent ? formatTime(parseInt(info.time_spent)) : '00:00:00'
+
+    detail.innerHTML = `
+        <div style="max-width:800px;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                <div>
+                    <h2 style="font-size:20px;font-weight:700;color:var(--tertiary);">${projName}</h2>
+                    <span style="font-size:10px;color:var(--on-surface-variant);">📱 From Device</span>
+                </div>
+                <div style="flex:1;"></div>
+                <button class="btn btn-ghost" id="btnSyncDevice">Sync from Device</button>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                <div class="card">
+                    <div class="card-header green">Details</div>
+                    <div class="card-body" style="display:flex;flex-direction:column;gap:8px;">
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:var(--on-surface-variant);font-size:11px;">Created</span>
+                            <span style="font-size:11px;">${info.created || 'Unknown'}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:var(--on-surface-variant);font-size:11px;">Key</span>
+                            <span style="font-size:11px;color:var(--tertiary);">${info.key || 'Not set'}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:var(--on-surface-variant);font-size:11px;">Scale</span>
+                            <span style="font-size:11px;color:var(--tertiary);">${info.scale || 'Not set'}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:var(--on-surface-variant);font-size:11px;">BPM</span>
+                            <span style="font-size:11px;color:var(--secondary);">${info.bpm || 'Not set'}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:var(--on-surface-variant);font-size:11px;">Time Spent</span>
+                            <span style="font-size:11px;color:var(--positive);">${timeSpent}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header pink">Description</div>
+                    <div class="card-body">
+                        <p style="font-size:11px;line-height:1.6;color:${info.description ? 'var(--on-background)' : 'var(--on-surface-variant)'};">
+                            ${info.description || 'No description'}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom:12px;">
+                <div class="card-header pink">Chord Progression</div>
+                <div class="card-body">
+                    ${progressionText
+                        ? `<pre style="font-size:11px;line-height:1.8;color:var(--on-background);white-space:pre-wrap;">${progressionText}</pre>`
+                        : `<span style="font-size:11px;color:var(--on-surface-variant);">No progression data</span>`
+                    }
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header blue" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span>Notes</span>
+                    <button class="btn btn-ghost" id="btnSaveDeviceNotes" style="padding:4px 10px;font-size:10px;display:none;">Save</button>
+                </div>
+                <div class="card-body" style="padding:0;">
+                    <textarea id="deviceNotesEditor" style="
+                        width:100%;
+                        min-height:160px;
+                        background:transparent;
+                        border:none;
+                        color:var(--on-background);
+                        font-size:12px;
+                        line-height:1.6;
+                        padding:16px;
+                        resize:vertical;
+                        font-family:inherit;
+                        outline:none;
+                    ">${notes}</textarea>
+                </div>
+            </div>
+        </div>
+    `
+
+    document.getElementById('btnSyncDevice').addEventListener('click', () => loadDeviceProjectDetail(projName))
+
+    const notesEditor = document.getElementById('deviceNotesEditor')
+    const btnSave = document.getElementById('btnSaveDeviceNotes')
+
+    notesEditor.addEventListener('input', () => btnSave.style.display = 'block')
+
+    btnSave.addEventListener('click', async () => {
+        const choice = await ipcRenderer.invoke('show-save-choice-dialog')
+
+        if (choice === 0) {
+            const success = await ipcRenderer.invoke('adb-write-file', `${basePath}/notes.txt`, notesEditor.value)
+            if (success) btnSave.style.display = 'none'
+            else alert('Failed to save to device.')
+        } else if (choice === 1) {
+            if (!currentFolderPath) {
+                alert('Open a local folder first.')
+                return
+            }
+            const localProjPath = path.join(currentFolderPath, projName)
+            if (!fs.existsSync(localProjPath)) fs.mkdirSync(localProjPath, { recursive: true })
+            fs.writeFileSync(path.join(localProjPath, 'notes.txt'), notesEditor.value)
+            btnSave.style.display = 'none'
+        }
     })
 }
 
@@ -913,7 +1069,6 @@ function renderChordEditor(index) {
 
     editor.innerHTML = `
         <div style="display:flex;gap:16px;max-width:900px;">
-
             <div style="flex:1;min-width:0;">
                 <h3 style="font-size:14px;font-weight:700;color:var(--tertiary);margin-bottom:16px;">Edit Chord</h3>
 
@@ -984,16 +1139,13 @@ function renderChordEditor(index) {
                 </div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;" id="previewPositionBtns"></div>
             </div>
-
         </div>
     `
 
     document.getElementById('btnSaveChord').addEventListener('click', () => saveChord(index))
 
     const canvas = document.getElementById('fretboardCanvas')
-
     const guitarInputs = document.querySelectorAll('.guitar-pos')
-
     let activePreviewIndex = 0
 
     function updatePreviewButtons() {
@@ -1112,147 +1264,4 @@ function showChordEditorEmptyState() {
             <div class="empty-state-subtitle">Add a chord or open an existing .radpack file to get started</div>
         </div>
     `
-
-    async function loadDeviceProjectDetail(projName) {
-    const detail = document.getElementById('projectDetail')
-    const basePath = `${DEVICE_PROJECTS_PATH}/${projName}`
-
-    detail.innerHTML = `<div class="empty-state"><span class="empty-state-subtitle">Loading from device...</span></div>`
-
-    const infoRaw = await ipcRenderer.invoke('adb-read-file', `${basePath}/info.txt`)
-    const notesRaw = await ipcRenderer.invoke('adb-read-file', `${basePath}/notes.txt`)
-    const progressionRaw = await ipcRenderer.invoke('adb-read-file', `${basePath}/progression.txt`)
-
-    const info = {}
-    if (infoRaw) {
-        infoRaw.split('\n').forEach(line => {
-            const idx = line.indexOf('=')
-            if (idx >= 0) info[line.substring(0, idx).trim()] = line.substring(idx + 1).trim()
-        })
-    }
-
-    const notes = notesRaw || ''
-
-    let progressionText = ''
-    if (progressionRaw) {
-        try {
-            const sections = JSON.parse(progressionRaw)
-            progressionText = sections.map(s =>
-                `${s.name}: ${s.chords.length > 0 ? s.chords.join(' → ') : 'No chords'}`
-            ).join('\n')
-        } catch (e) {
-            progressionText = 'Could not read progression'
-        }
-    }
-
-    const timeSpent = info.time_spent ? formatTime(parseInt(info.time_spent)) : '00:00:00'
-
-    detail.innerHTML = `
-        <div style="max-width:800px;">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
-                <div>
-                    <h2 style="font-size:20px;font-weight:700;color:var(--tertiary);">${projName}</h2>
-                    <span style="font-size:10px;color:var(--on-surface-variant);">📱 From Device</span>
-                </div>
-                <div style="flex:1;"></div>
-                <button class="btn btn-ghost" id="btnSyncDevice">Sync from Device</button>
-            </div>
-
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-                <div class="card">
-                    <div class="card-header green">Details</div>
-                    <div class="card-body" style="display:flex;flex-direction:column;gap:8px;">
-                        <div style="display:flex;justify-content:space-between;">
-                            <span style="color:var(--on-surface-variant);font-size:11px;">Created</span>
-                            <span style="font-size:11px;">${info.created || 'Unknown'}</span>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;">
-                            <span style="color:var(--on-surface-variant);font-size:11px;">Key</span>
-                            <span style="font-size:11px;color:var(--tertiary);">${info.key || 'Not set'}</span>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;">
-                            <span style="color:var(--on-surface-variant);font-size:11px;">Scale</span>
-                            <span style="font-size:11px;color:var(--tertiary);">${info.scale || 'Not set'}</span>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;">
-                            <span style="color:var(--on-surface-variant);font-size:11px;">BPM</span>
-                            <span style="font-size:11px;color:var(--secondary);">${info.bpm || 'Not set'}</span>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;">
-                            <span style="color:var(--on-surface-variant);font-size:11px;">Time Spent</span>
-                            <span style="font-size:11px;color:var(--positive);">${timeSpent}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header pink">Description</div>
-                    <div class="card-body">
-                        <p style="font-size:11px;line-height:1.6;color:${info.description ? 'var(--on-background)' : 'var(--on-surface-variant)'};">
-                            ${info.description || 'No description'}
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card" style="margin-bottom:12px;">
-                <div class="card-header pink">Chord Progression</div>
-                <div class="card-body">
-                    ${progressionText
-                        ? `<pre style="font-size:11px;line-height:1.8;color:var(--on-background);white-space:pre-wrap;">${progressionText}</pre>`
-                        : `<span style="font-size:11px;color:var(--on-surface-variant);">No progression data</span>`
-                    }
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-header blue" style="display:flex;align-items:center;justify-content:space-between;">
-                    <span>Notes</span>
-                    <button class="btn btn-ghost" id="btnSaveDeviceNotes" style="padding:4px 10px;font-size:10px;display:none;">Save</button>
-                </div>
-                <div class="card-body" style="padding:0;">
-                    <textarea id="deviceNotesEditor" style="
-                        width:100%;
-                        min-height:160px;
-                        background:transparent;
-                        border:none;
-                        color:var(--on-background);
-                        font-size:12px;
-                        line-height:1.6;
-                        padding:16px;
-                        resize:vertical;
-                        font-family:inherit;
-                        outline:none;
-                    ">${notes}</textarea>
-                </div>
-            </div>
-        </div>
-    `
-
-    document.getElementById('btnSyncDevice').addEventListener('click', () => loadDeviceProjectDetail(projName))
-
-    const notesEditor = document.getElementById('deviceNotesEditor')
-    const btnSave = document.getElementById('btnSaveDeviceNotes')
-
-    notesEditor.addEventListener('input', () => btnSave.style.display = 'block')
-
-    btnSave.addEventListener('click', async () => {
-        const choice = await ipcRenderer.invoke('show-save-choice-dialog')
-
-        if (choice === 0) {
-            const success = await ipcRenderer.invoke('adb-write-file', `${basePath}/notes.txt`, notesEditor.value)
-            if (success) btnSave.style.display = 'none'
-            else alert('Failed to save to device.')
-        } else if (choice === 1) {
-            if (!currentFolderPath) {
-                alert('Open a local folder first.')
-                return
-            }
-            const localProjPath = path.join(currentFolderPath, projName)
-            if (!fs.existsSync(localProjPath)) fs.mkdirSync(localProjPath, { recursive: true })
-            fs.writeFileSync(path.join(localProjPath, 'notes.txt'), notesEditor.value)
-            btnSave.style.display = 'none'
-        }
-    })
-}
 }
