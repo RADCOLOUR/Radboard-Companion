@@ -1,10 +1,10 @@
 {
   "name": "radboard-companion",
-  "version": "1.0.0",
+  "version": "1.0.0-Alpha-3",
   "description": "Radboard Companion — Chord Pack Editor and Project Manager",
   "main": "main.js",
 
-"scripts": {
+  "scripts": {
     "start": "electron .",
     "build": "electron-builder -wml",
     "build:mac": "electron-builder --mac",
@@ -20,14 +20,15 @@
   "build": {
     "appId": "com.radcolour.radboardcompanion",
     "productName": "Radboard Companion",
+    "directories": {
+      "output": "dist-build"
+    },
     "files": [
-      "dist/**/*",
-      "node_modules/**/*",
-      "package.json",
       "main.js",
       "preload.js",
       "index.html",
-      "assets/**/*"
+      "assets/**/*",
+      "package.json"
     ],
 
     "mac": {
