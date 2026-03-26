@@ -24,12 +24,12 @@
       "output": "dist-build"
     },
     "files": [
-      "main.js",
-      "preload.js",
-      "index.html",
-      "assets/**/*",
-      "package.json"
-    ],
+  "main.js",
+  "index.html",
+  "styles.css",
+  "renderer.js",
+  "package.json"
+ ],
 
     "mac": {
       "target": "dmg",
