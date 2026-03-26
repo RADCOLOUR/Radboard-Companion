@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const { exec } = require('child_process')
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -56,4 +57,71 @@ ipcMain.handle('save-file-dialog', async (event, content) => {
         return true
     }
     return false
+})
+
+ipcMain.handle('adb-check-device', async () => {
+    return new Promise((resolve) => {
+        exec('adb devices', (err, stdout) => {
+            if (err) { resolve(false); return }
+            const lines = stdout.trim().split('\n').slice(1).filter(l => l.trim() && l.includes('device'))
+            resolve(lines.length > 0)
+        })
+    })
+})
+
+ipcMain.handle('adb-list-projects', async () => {
+    return new Promise((resolve) => {
+        exec('adb shell ls /sdcard/Documents/Radcolour/projects', (err, stdout) => {
+            if (err) { resolve([]); return }
+            const projects = stdout.trim().split('\n').map(l => l.trim()).filter(l => l.length > 0)
+            resolve(projects)
+        })
+    })
+})
+
+ipcMain.handle('adb-pull-file', async (event, devicePath, localPath) => {
+    return new Promise((resolve) => {
+        exec(`adb pull "${devicePath}" "${localPath}"`, (err) => {
+            resolve(!err)
+        })
+    })
+})
+
+ipcMain.handle('adb-push-file', async (event, localPath, devicePath) => {
+    return new Promise((resolve) => {
+        exec(`adb push "${localPath}" "${devicePath}"`, (err) => {
+            resolve(!err)
+        })
+    })
+})
+
+ipcMain.handle('adb-read-file', async (event, devicePath) => {
+    return new Promise((resolve) => {
+        exec(`adb shell cat "${devicePath}"`, (err, stdout) => {
+            if (err) { resolve(null); return }
+            resolve(stdout)
+        })
+    })
+})
+
+ipcMain.handle('adb-write-file', async (event, devicePath, content) => {
+    return new Promise((resolve) => {
+        const tmp = path.join(app.getPath('temp'), 'radboard_tmp_' + Date.now() + '.txt')
+        fs.writeFileSync(tmp, content)
+        exec(`adb push "${tmp}" "${devicePath}"`, (err) => {
+            fs.unlinkSync(tmp)
+            resolve(!err)
+        })
+    })
+})
+
+ipcMain.handle('show-save-choice-dialog', async () => {
+    const result = await dialog.showMessageBox({
+        type: 'question',
+        buttons: ['Save to Device', 'Save to Local Folder', 'Cancel'],
+        defaultId: 0,
+        title: 'Save Project',
+        message: 'Where would you like to save changes?'
+    })
+    return result.response
 })

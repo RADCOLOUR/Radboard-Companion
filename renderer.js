@@ -6,6 +6,9 @@ let currentFolderPath = null
 let packChords = []
 let selectedChordIndex = -1
 let searchQuery = ''
+let deviceConnected = false
+let deviceProjects = []
+const DEVICE_PROJECTS_PATH = '/sdcard/Documents/Radcolour/projects'
 
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -18,6 +21,66 @@ document.querySelectorAll('.tab').forEach(tab => {
 
 loadProjectsPanel()
 loadChordPackPanel()
+startDevicePolling()
+
+function startDevicePolling() {
+    checkDevice()
+    setInterval(checkDevice, 5000)
+}
+
+async function checkDevice() {
+    const connected = await ipcRenderer.invoke('adb-check-device')
+
+    if (connected !== deviceConnected) {
+        deviceConnected = connected
+        if (connected) {
+            await refreshDeviceProjects()
+        } else {
+            deviceProjects = []
+            renderProjectList()
+            updateDeviceIndicator(false)
+        }
+    }
+}
+
+async function refreshDeviceProjects() {
+    deviceProjects = await ipcRenderer.invoke('adb-list-projects')
+    renderProjectList()
+    updateDeviceIndicator(true)
+}
+
+function updateDeviceIndicator(connected) {
+    let indicator = document.getElementById('deviceIndicator')
+    if (!indicator) {
+        indicator = document.createElement('div')
+        indicator.id = 'deviceIndicator'
+        indicator.style.cssText = `
+            padding: 6px 12px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            border-bottom: 1px solid var(--outline);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        `
+        const projectList = document.getElementById('projectList')
+        if (projectList) projectList.parentElement.insertBefore(indicator, projectList)
+    }
+
+    if (connected) {
+        indicator.innerHTML = `
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--positive);display:inline-block;"></span>
+            <span style="color:var(--positive);">Device Connected</span>
+        `
+    } else {
+        indicator.innerHTML = `
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--error);display:inline-block;"></span>
+            <span style="color:var(--on-surface-variant);">No Device</span>
+        `
+    }
+}
 
 function loadProjectsPanel() {
     const panel = document.getElementById('tab-projects')
@@ -179,11 +242,64 @@ function renderProjectList() {
     list.innerHTML = ''
 
     const filtered = allProjects.filter(p => p.toLowerCase().includes(searchQuery))
+    const filteredDevice = deviceProjects.filter(p => p.toLowerCase().includes(searchQuery))
 
-    if (filtered.length === 0) {
+    if (filtered.length === 0 && filteredDevice.length === 0) {
         list.innerHTML = `<div class="empty-state"><span class="empty-state-subtitle">${searchQuery ? 'No projects match your search' : 'No projects found in this folder'}</span></div>`
         return
     }
+
+    if (filtered.length > 0) {
+        const localHeader = document.createElement('div')
+        localHeader.style.cssText = `font-size:10px;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:0.1em;padding:4px 12px 4px;`
+        localHeader.textContent = 'Local'
+        list.appendChild(localHeader)
+
+        filtered.forEach(projName => {
+            const projPath = path.join(currentFolderPath, projName)
+            const btn = document.createElement('div')
+            btn.style.cssText = `
+                padding: 10px 12px;
+                border-radius: 8px;
+                cursor: pointer;
+                margin-bottom: 4px;
+                font-size: 12px;
+                color: var(--on-background);
+                transition: background 0.15s;
+            `
+            btn.textContent = projName
+            btn.addEventListener('mouseenter', () => btn.style.background = 'var(--surface-variant)')
+            btn.addEventListener('mouseleave', () => btn.style.background = 'transparent')
+            btn.addEventListener('click', () => loadProjectDetail(projPath, projName))
+            list.appendChild(btn)
+        })
+    }
+
+    if (filteredDevice.length > 0) {
+        const deviceHeader = document.createElement('div')
+        deviceHeader.style.cssText = `font-size:10px;color:var(--tertiary);text-transform:uppercase;letter-spacing:0.1em;padding:8px 12px 4px;`
+        deviceHeader.textContent = '📱 From Device'
+        list.appendChild(deviceHeader)
+
+        filteredDevice.forEach(projName => {
+            const btn = document.createElement('div')
+            btn.style.cssText = `
+                padding: 10px 12px;
+                border-radius: 8px;
+                cursor: pointer;
+                margin-bottom: 4px;
+                font-size: 12px;
+                color: var(--tertiary);
+                transition: background 0.15s;
+            `
+            btn.textContent = projName
+            btn.addEventListener('mouseenter', () => btn.style.background = 'var(--surface-variant)')
+            btn.addEventListener('mouseleave', () => btn.style.background = 'transparent')
+            btn.addEventListener('click', () => loadDeviceProjectDetail(projName))
+            list.appendChild(btn)
+        })
+    }
+}
 
     filtered.forEach(projName => {
         const projPath = path.join(currentFolderPath, projName)
@@ -203,17 +319,17 @@ function renderProjectList() {
         btn.addEventListener('click', () => loadProjectDetail(projPath, projName))
         list.appendChild(btn)
     })
-}
 
-function loadProjectDetail(projPath, projName) {
-    const detail = document.getElementById('projectDetail')
 
-    const infoPath = path.join(projPath, 'info.txt')
-    const notesPath = path.join(projPath, 'notes.txt')
-    const progressionPath = path.join(projPath, 'progression.txt')
+    function loadProjectDetail(projPath, projName) {
+      const detail = document.getElementById('projectDetail')
 
-    const info = {}
-    if (fs.existsSync(infoPath)) {
+      const infoPath = path.join(projPath, 'info.txt')
+      const notesPath = path.join(projPath, 'notes.txt')
+      const progressionPath = path.join(projPath, 'progression.txt')
+
+      const info = {}
+      if (fs.existsSync(infoPath)) {
         fs.readFileSync(infoPath, 'utf8').split('\n').forEach(line => {
             const idx = line.indexOf('=')
             if (idx >= 0) {
@@ -996,4 +1112,147 @@ function showChordEditorEmptyState() {
             <div class="empty-state-subtitle">Add a chord or open an existing .radpack file to get started</div>
         </div>
     `
+
+    async function loadDeviceProjectDetail(projName) {
+    const detail = document.getElementById('projectDetail')
+    const basePath = `${DEVICE_PROJECTS_PATH}/${projName}`
+
+    detail.innerHTML = `<div class="empty-state"><span class="empty-state-subtitle">Loading from device...</span></div>`
+
+    const infoRaw = await ipcRenderer.invoke('adb-read-file', `${basePath}/info.txt`)
+    const notesRaw = await ipcRenderer.invoke('adb-read-file', `${basePath}/notes.txt`)
+    const progressionRaw = await ipcRenderer.invoke('adb-read-file', `${basePath}/progression.txt`)
+
+    const info = {}
+    if (infoRaw) {
+        infoRaw.split('\n').forEach(line => {
+            const idx = line.indexOf('=')
+            if (idx >= 0) info[line.substring(0, idx).trim()] = line.substring(idx + 1).trim()
+        })
+    }
+
+    const notes = notesRaw || ''
+
+    let progressionText = ''
+    if (progressionRaw) {
+        try {
+            const sections = JSON.parse(progressionRaw)
+            progressionText = sections.map(s =>
+                `${s.name}: ${s.chords.length > 0 ? s.chords.join(' → ') : 'No chords'}`
+            ).join('\n')
+        } catch (e) {
+            progressionText = 'Could not read progression'
+        }
+    }
+
+    const timeSpent = info.time_spent ? formatTime(parseInt(info.time_spent)) : '00:00:00'
+
+    detail.innerHTML = `
+        <div style="max-width:800px;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                <div>
+                    <h2 style="font-size:20px;font-weight:700;color:var(--tertiary);">${projName}</h2>
+                    <span style="font-size:10px;color:var(--on-surface-variant);">📱 From Device</span>
+                </div>
+                <div style="flex:1;"></div>
+                <button class="btn btn-ghost" id="btnSyncDevice">Sync from Device</button>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                <div class="card">
+                    <div class="card-header green">Details</div>
+                    <div class="card-body" style="display:flex;flex-direction:column;gap:8px;">
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:var(--on-surface-variant);font-size:11px;">Created</span>
+                            <span style="font-size:11px;">${info.created || 'Unknown'}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:var(--on-surface-variant);font-size:11px;">Key</span>
+                            <span style="font-size:11px;color:var(--tertiary);">${info.key || 'Not set'}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:var(--on-surface-variant);font-size:11px;">Scale</span>
+                            <span style="font-size:11px;color:var(--tertiary);">${info.scale || 'Not set'}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:var(--on-surface-variant);font-size:11px;">BPM</span>
+                            <span style="font-size:11px;color:var(--secondary);">${info.bpm || 'Not set'}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="color:var(--on-surface-variant);font-size:11px;">Time Spent</span>
+                            <span style="font-size:11px;color:var(--positive);">${timeSpent}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header pink">Description</div>
+                    <div class="card-body">
+                        <p style="font-size:11px;line-height:1.6;color:${info.description ? 'var(--on-background)' : 'var(--on-surface-variant)'};">
+                            ${info.description || 'No description'}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom:12px;">
+                <div class="card-header pink">Chord Progression</div>
+                <div class="card-body">
+                    ${progressionText
+                        ? `<pre style="font-size:11px;line-height:1.8;color:var(--on-background);white-space:pre-wrap;">${progressionText}</pre>`
+                        : `<span style="font-size:11px;color:var(--on-surface-variant);">No progression data</span>`
+                    }
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header blue" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span>Notes</span>
+                    <button class="btn btn-ghost" id="btnSaveDeviceNotes" style="padding:4px 10px;font-size:10px;display:none;">Save</button>
+                </div>
+                <div class="card-body" style="padding:0;">
+                    <textarea id="deviceNotesEditor" style="
+                        width:100%;
+                        min-height:160px;
+                        background:transparent;
+                        border:none;
+                        color:var(--on-background);
+                        font-size:12px;
+                        line-height:1.6;
+                        padding:16px;
+                        resize:vertical;
+                        font-family:inherit;
+                        outline:none;
+                    ">${notes}</textarea>
+                </div>
+            </div>
+        </div>
+    `
+
+    document.getElementById('btnSyncDevice').addEventListener('click', () => loadDeviceProjectDetail(projName))
+
+    const notesEditor = document.getElementById('deviceNotesEditor')
+    const btnSave = document.getElementById('btnSaveDeviceNotes')
+
+    notesEditor.addEventListener('input', () => btnSave.style.display = 'block')
+
+    btnSave.addEventListener('click', async () => {
+        const choice = await ipcRenderer.invoke('show-save-choice-dialog')
+
+        if (choice === 0) {
+            const success = await ipcRenderer.invoke('adb-write-file', `${basePath}/notes.txt`, notesEditor.value)
+            if (success) btnSave.style.display = 'none'
+            else alert('Failed to save to device.')
+        } else if (choice === 1) {
+            if (!currentFolderPath) {
+                alert('Open a local folder first.')
+                return
+            }
+            const localProjPath = path.join(currentFolderPath, projName)
+            if (!fs.existsSync(localProjPath)) fs.mkdirSync(localProjPath, { recursive: true })
+            fs.writeFileSync(path.join(localProjPath, 'notes.txt'), notesEditor.value)
+            btnSave.style.display = 'none'
+        }
+    })
+}
 }
