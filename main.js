@@ -16,8 +16,17 @@ function getAdbPath() {
 function adb(command) {
     const adbPath = getAdbPath()
     return new Promise((resolve) => {
-        exec(`"${adbPath}" ${command}`, (err, stdout) => {
-            resolve({ err, stdout })
+        exec(`"${adbPath}" ${command}`, (err, stdout, stderr) => {
+            resolve({ err, stdout: stdout || '', stderr: stderr || '' })
+        })
+    })
+}
+
+function adbSerial(serial, command) {
+    const adbPath = getAdbPath()
+    return new Promise((resolve) => {
+        exec(`"${adbPath}" -s "${serial}" ${command}`, (err, stdout, stderr) => {
+            resolve({ err, stdout: stdout || '', stderr: stderr || '' })
         })
     })
 }
@@ -76,7 +85,7 @@ ipcMain.handle('save-file-dialog', async (event, content) => {
 ipcMain.handle('adb-check-device', async () => {
     const { err, stdout } = await adb('devices')
     if (err) return false
-    const lines = stdout.trim().split('\n').slice(1).filter(l => l.trim() && l.includes('device'))
+    const lines = stdout.trim().split('\n').slice(1).filter(l => l.trim() && l.includes('\tdevice'))
     return lines.length > 0
 })
 
@@ -119,4 +128,38 @@ ipcMain.handle('show-save-choice-dialog', async () => {
         message: 'Where would you like to save changes?'
     })
     return result.response
+})
+
+ipcMain.handle('adb-list-devices', async () => {
+    const { err, stdout } = await adb('devices -l')
+    if (err) return []
+
+    const lines = stdout.trim().split('\n').slice(1).filter(l => l.trim())
+    const devices = []
+
+    for (const line of lines) {
+        const parts = line.trim().split(/\s+/)
+        const serial = parts[0]
+        const status = parts[1]
+
+        if (!serial || !status) continue
+
+        const device = { serial, status, model: 'Unknown', androidVersion: 'Unknown' }
+
+        if (status === 'device') {
+            const modelRes = await adbSerial(serial, 'shell getprop ro.product.model')
+            if (!modelRes.err && modelRes.stdout.trim()) {
+                device.model = modelRes.stdout.trim()
+            }
+
+            const versionRes = await adbSerial(serial, 'shell getprop ro.build.version.release')
+            if (!versionRes.err && versionRes.stdout.trim()) {
+                device.androidVersion = versionRes.stdout.trim()
+            }
+        }
+
+        devices.push(device)
+    }
+
+    return devices
 })

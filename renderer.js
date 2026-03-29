@@ -8,6 +8,7 @@ let selectedChordIndex = -1
 let searchQuery = ''
 let deviceConnected = false
 let deviceProjects = []
+let knownDeviceSerials = new Set()
 const DEVICE_PROJECTS_PATH = '/sdcard/Documents/Radcolour/projects'
 
 document.querySelectorAll('.tab').forEach(tab => {
@@ -20,6 +21,7 @@ document.querySelectorAll('.tab').forEach(tab => {
 })
 
 loadProjectsPanel()
+loadDevicesPanel()
 loadChordPackPanel()
 startDevicePolling()
 
@@ -57,7 +59,9 @@ function showToast(message, color = 'var(--positive)') {
 
 function startDevicePolling() {
     checkDevice()
+    pollDevicesTab()
     setInterval(checkDevice, 5000)
+    setInterval(pollDevicesTab, 5000)
 }
 
 async function checkDevice() {
@@ -76,6 +80,30 @@ async function checkDevice() {
             updateDeviceIndicator(false)
         }
     }
+}
+
+async function pollDevicesTab() {
+    const devices = await ipcRenderer.invoke('adb-list-devices')
+    renderDevicesList(devices)
+
+    const currentSerials = new Set(devices.map(d => d.serial))
+
+    for (const serial of currentSerials) {
+        if (!knownDeviceSerials.has(serial)) {
+            const dev = devices.find(d => d.serial === serial)
+            if (dev && dev.status === 'device') {
+                showToast(`📱 ${dev.model} connected`)
+            }
+        }
+    }
+
+    for (const serial of knownDeviceSerials) {
+        if (!currentSerials.has(serial)) {
+            showToast('Device disconnected', 'var(--error)')
+        }
+    }
+
+    knownDeviceSerials = currentSerials
 }
 
 async function refreshDeviceProjects() {
@@ -143,6 +171,98 @@ function loadProjectsPanel() {
         renderProjectList()
     })
     showProjectEmptyState()
+}
+
+function loadDevicesPanel() {
+    const panel = document.getElementById('tab-devices')
+    panel.innerHTML = `
+        <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--outline);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+                <div>
+                    <div style="font-size:14px;font-weight:700;color:var(--on-background);">Connected Devices</div>
+                    <div style="font-size:11px;color:var(--on-surface-variant);margin-top:2px;">ADB USB connections</div>
+                </div>
+                <button class="btn btn-ghost" id="btnRefreshDevices" style="padding:6px 14px;font-size:11px;">Refresh</button>
+            </div>
+            <div id="devicesList" style="flex:1;overflow-y:auto;padding:16px;"></div>
+        </div>
+    `
+
+    document.getElementById('btnRefreshDevices').addEventListener('click', pollDevicesTab)
+}
+
+function renderDevicesList(devices) {
+    const container = document.getElementById('devicesList')
+    if (!container) return
+
+    if (!devices || devices.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state" style="height:100%;padding-top:80px;">
+                <div style="font-size:32px;margin-bottom:12px;">📱</div>
+                <div class="empty-state-title">No devices found</div>
+                <div class="empty-state-subtitle">Connect an Android device via USB with ADB debugging enabled</div>
+            </div>
+        `
+        return
+    }
+
+    container.innerHTML = ''
+
+    devices.forEach(device => {
+        const isReady = device.status === 'device'
+        const isUnauth = device.status === 'unauthorized'
+
+        const statusColor = isReady ? 'var(--positive)' : isUnauth ? 'var(--secondary)' : 'var(--error)'
+        const statusLabel = isReady ? 'Ready' : isUnauth ? 'Unauthorized' : device.status
+
+        const card = document.createElement('div')
+        card.style.cssText = `
+            background: var(--surface);
+            border: 1px solid var(--outline);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 10px;
+            max-width: 600px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        `
+
+        card.innerHTML = `
+            <div style="width:40px;height:40px;border-radius:10px;background:var(--surface-variant);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">
+                📱
+            </div>
+            <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                    <span style="font-size:13px;font-weight:700;color:var(--on-background);">${device.model}</span>
+                    <span style="
+                        font-size:9px;
+                        font-weight:700;
+                        text-transform:uppercase;
+                        letter-spacing:0.1em;
+                        padding:2px 8px;
+                        border-radius:20px;
+                        background:${statusColor}22;
+                        color:${statusColor};
+                        border:1px solid ${statusColor}44;
+                    ">${statusLabel}</span>
+                </div>
+                <div style="display:flex;gap:20px;">
+                    <div>
+                        <div style="font-size:9px;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;">Serial</div>
+                        <div style="font-size:11px;color:var(--on-background);font-family:monospace;">${device.serial}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:9px;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;">Android</div>
+                        <div style="font-size:11px;color:var(--tertiary);">${isReady ? device.androidVersion : '—'}</div>
+                    </div>
+                </div>
+                ${isUnauth ? `<div style="font-size:10px;color:var(--secondary);margin-top:8px;">⚠ Check your device and tap "Allow USB Debugging"</div>` : ''}
+            </div>
+        `
+
+        container.appendChild(card)
+    })
 }
 
 function openProjectFolder() {
