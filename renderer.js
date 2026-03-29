@@ -8,8 +8,9 @@ let selectedChordIndex = -1
 let searchQuery = ''
 let deviceConnected = false
 let deviceProjects = []
+let connectedDeviceName = null
 let knownDeviceSerials = new Set()
-const DEVICE_PROJECTS_PATH = '/sdcard/Documents/Radcolour/projects'
+const DEVICE_PROJECTS_PATH = '/sdcard/Android/data/com.radcolour.myapplication/files/projects'
 
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -70,12 +71,15 @@ async function checkDevice() {
     if (connected !== deviceConnected) {
         deviceConnected = connected
         if (connected) {
+            connectedDeviceName = await ipcRenderer.invoke('adb-get-device-name')
             await refreshDeviceProjects()
-            showToast('📱 Radboard device connected')
+            showToast(`📱 ${connectedDeviceName || 'Device'} connected`)
             updateDeviceIndicator(true)
         } else {
+            connectedDeviceName = null
             deviceProjects = []
             renderProjectList()
+            renderDeviceProjectList()
             showToast('Device disconnected', 'var(--error)')
             updateDeviceIndicator(false)
         }
@@ -109,33 +113,19 @@ async function pollDevicesTab() {
 async function refreshDeviceProjects() {
     deviceProjects = await ipcRenderer.invoke('adb-list-projects')
     renderProjectList()
+    renderDeviceProjectList()
     updateDeviceIndicator(true)
 }
 
 function updateDeviceIndicator(connected) {
-    let indicator = document.getElementById('deviceIndicator')
-    if (!indicator) {
-        indicator = document.createElement('div')
-        indicator.id = 'deviceIndicator'
-        indicator.style.cssText = `
-            padding: 6px 12px;
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            border-bottom: 1px solid var(--outline);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        `
-        const projectList = document.getElementById('projectList')
-        if (projectList) projectList.parentElement.insertBefore(indicator, projectList)
-    }
+    const indicator = document.getElementById('deviceIndicator')
+    if (!indicator) return
 
     if (connected) {
+        const label = connectedDeviceName ? `📱 ${connectedDeviceName}` : 'Device Connected'
         indicator.innerHTML = `
             <span style="width:6px;height:6px;border-radius:50%;background:var(--positive);display:inline-block;"></span>
-            <span style="color:var(--positive);">Device Connected</span>
+            <span style="color:var(--positive);">${label}</span>
         `
     } else {
         indicator.innerHTML = `
@@ -150,19 +140,57 @@ function loadProjectsPanel() {
     panel.innerHTML = `
         <div style="display:flex;flex-direction:column;width:260px;border-right:1px solid var(--outline);flex-shrink:0;">
             <div style="padding:12px;border-bottom:1px solid var(--outline);display:flex;gap:8px;align-items:center;">
-                <span style="font-size:11px;font-weight:700;color:var(--positive);flex:1;">Projects</span>
-                <button class="btn btn-ghost" id="btnOpenFolder" style="padding:6px 10px;">Open Folder</button>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:11px;font-weight:700;color:var(--positive);">Projects</div>
+                    <div id="folderLabel" style="font-size:10px;color:var(--on-surface-variant);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">No folder open</div>
+                </div>
+                <button class="btn btn-ghost" id="btnOpenFolder" style="padding:6px 10px;flex-shrink:0;">Open Folder</button>
             </div>
-            <div style="padding:8px;border-bottom:1px solid var(--outline);display:flex;gap:8px;">
-                <button class="btn btn-positive" id="btnNewProject" style="flex:1;">+ New Project</button>
+            <div style="display:flex;border-bottom:1px solid var(--outline);">
+                <button id="projTabLocal" style="flex:1;padding:8px;font-size:11px;font-weight:600;background:transparent;border:none;border-bottom:2px solid var(--positive);color:var(--positive);cursor:pointer;">Local</button>
+                <button id="projTabDevice" style="flex:1;padding:8px;font-size:11px;font-weight:600;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--on-surface-variant);cursor:pointer;">Device</button>
             </div>
-            <div style="padding:8px;border-bottom:1px solid var(--outline);">
-                <input id="projectSearch" type="text" placeholder="Search projects..." style="width:100%;"/>
+            <div id="localProjectsPane" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+                <div style="padding:8px;border-bottom:1px solid var(--outline);">
+                    <button class="btn btn-positive" id="btnNewProject" style="width:100%;">+ New Project</button>
+                </div>
+                <div style="padding:8px;border-bottom:1px solid var(--outline);">
+                    <input id="projectSearch" type="text" placeholder="Search projects..." style="width:100%;"/>
+                </div>
+                <div id="projectList" style="flex:1;overflow-y:auto;padding:8px;"></div>
             </div>
-            <div id="projectList" style="flex:1;overflow-y:auto;padding:8px;"></div>
+            <div id="deviceProjectsPane" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+                <div id="deviceIndicator" style="padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;border-bottom:1px solid var(--outline);display:flex;align-items:center;gap:6px;">
+                    <span style="width:6px;height:6px;border-radius:50%;background:var(--error);display:inline-block;"></span>
+                    <span style="color:var(--on-surface-variant);">No Device</span>
+                </div>
+                <div id="deviceProjectList" style="flex:1;overflow-y:auto;padding:8px;"></div>
+            </div>
         </div>
         <div id="projectDetail" style="flex:1;overflow-y:auto;padding:16px;"></div>
     `
+
+    let activeProjectTab = 'local'
+
+    document.getElementById('projTabLocal').addEventListener('click', () => {
+        activeProjectTab = 'local'
+        document.getElementById('projTabLocal').style.borderBottomColor = 'var(--positive)'
+        document.getElementById('projTabLocal').style.color = 'var(--positive)'
+        document.getElementById('projTabDevice').style.borderBottomColor = 'transparent'
+        document.getElementById('projTabDevice').style.color = 'var(--on-surface-variant)'
+        document.getElementById('localProjectsPane').style.display = 'flex'
+        document.getElementById('deviceProjectsPane').style.display = 'none'
+    })
+
+    document.getElementById('projTabDevice').addEventListener('click', () => {
+        activeProjectTab = 'device'
+        document.getElementById('projTabDevice').style.borderBottomColor = 'var(--tertiary)'
+        document.getElementById('projTabDevice').style.color = 'var(--tertiary)'
+        document.getElementById('projTabLocal').style.borderBottomColor = 'transparent'
+        document.getElementById('projTabLocal').style.color = 'var(--on-surface-variant)'
+        document.getElementById('deviceProjectsPane').style.display = 'flex'
+        document.getElementById('localProjectsPane').style.display = 'none'
+    })
 
     document.getElementById('btnOpenFolder').addEventListener('click', openProjectFolder)
     document.getElementById('btnNewProject').addEventListener('click', createNewProject)
@@ -269,6 +297,8 @@ function openProjectFolder() {
     ipcRenderer.invoke('open-folder-dialog').then(result => {
         if (result && result.length > 0) {
             currentFolderPath = result[0]
+            const label = document.getElementById('folderLabel')
+            if (label) label.textContent = path.basename(currentFolderPath)
             scanProjectFolder(currentFolderPath)
         }
     })
@@ -397,63 +427,61 @@ function renderProjectList() {
     list.innerHTML = ''
 
     const filtered = allProjects.filter(p => p.toLowerCase().includes(searchQuery))
-    const filteredDevice = deviceProjects.filter(p => p.toLowerCase().includes(searchQuery))
 
-    if (filtered.length === 0 && filteredDevice.length === 0) {
+    if (filtered.length === 0) {
         list.innerHTML = `<div class="empty-state"><span class="empty-state-subtitle">${searchQuery ? 'No projects match your search' : 'No projects found in this folder'}</span></div>`
         return
     }
 
-    if (filtered.length > 0) {
-        const localHeader = document.createElement('div')
-        localHeader.style.cssText = `font-size:10px;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:0.1em;padding:4px 12px 4px;`
-        localHeader.textContent = 'Local'
-        list.appendChild(localHeader)
+    filtered.forEach(projName => {
+        const projPath = path.join(currentFolderPath, projName)
+        const btn = document.createElement('div')
+        btn.style.cssText = `
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 4px;
+            font-size: 12px;
+            color: var(--on-background);
+            transition: background 0.15s;
+        `
+        btn.textContent = projName
+        btn.addEventListener('mouseenter', () => btn.style.background = 'var(--surface-variant)')
+        btn.addEventListener('mouseleave', () => btn.style.background = 'transparent')
+        btn.addEventListener('click', () => loadProjectDetail(projPath, projName))
+        list.appendChild(btn)
+    })
+}
 
-        filtered.forEach(projName => {
-            const projPath = path.join(currentFolderPath, projName)
-            const btn = document.createElement('div')
-            btn.style.cssText = `
-                padding: 10px 12px;
-                border-radius: 8px;
-                cursor: pointer;
-                margin-bottom: 4px;
-                font-size: 12px;
-                color: var(--on-background);
-                transition: background 0.15s;
-            `
-            btn.textContent = projName
-            btn.addEventListener('mouseenter', () => btn.style.background = 'var(--surface-variant)')
-            btn.addEventListener('mouseleave', () => btn.style.background = 'transparent')
-            btn.addEventListener('click', () => loadProjectDetail(projPath, projName))
-            list.appendChild(btn)
-        })
+function renderDeviceProjectList() {
+    const list = document.getElementById('deviceProjectList')
+    if (!list) return
+    list.innerHTML = ''
+
+    const filtered = deviceProjects.filter(p => p.toLowerCase().includes(searchQuery))
+
+    if (filtered.length === 0) {
+        list.innerHTML = `<div class="empty-state"><span class="empty-state-subtitle">${deviceConnected ? 'No projects found on device' : 'No device connected'}</span></div>`
+        return
     }
 
-    if (filteredDevice.length > 0) {
-        const deviceHeader = document.createElement('div')
-        deviceHeader.style.cssText = `font-size:10px;color:var(--tertiary);text-transform:uppercase;letter-spacing:0.1em;padding:8px 12px 4px;`
-        deviceHeader.textContent = '📱 From Device'
-        list.appendChild(deviceHeader)
-
-        filteredDevice.forEach(projName => {
-            const btn = document.createElement('div')
-            btn.style.cssText = `
-                padding: 10px 12px;
-                border-radius: 8px;
-                cursor: pointer;
-                margin-bottom: 4px;
-                font-size: 12px;
-                color: var(--tertiary);
-                transition: background 0.15s;
-            `
-            btn.textContent = projName
-            btn.addEventListener('mouseenter', () => btn.style.background = 'var(--surface-variant)')
-            btn.addEventListener('mouseleave', () => btn.style.background = 'transparent')
-            btn.addEventListener('click', () => loadDeviceProjectDetail(projName))
-            list.appendChild(btn)
-        })
-    }
+    filtered.forEach(projName => {
+        const btn = document.createElement('div')
+        btn.style.cssText = `
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 4px;
+            font-size: 12px;
+            color: var(--tertiary);
+            transition: background 0.15s;
+        `
+        btn.textContent = projName
+        btn.addEventListener('mouseenter', () => btn.style.background = 'var(--surface-variant)')
+        btn.addEventListener('mouseleave', () => btn.style.background = 'transparent')
+        btn.addEventListener('click', () => loadDeviceProjectDetail(projName))
+        list.appendChild(btn)
+    })
 }
 
 function loadProjectDetail(projPath, projName) {

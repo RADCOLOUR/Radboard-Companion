@@ -90,7 +90,10 @@ ipcMain.handle('adb-check-device', async () => {
 })
 
 ipcMain.handle('adb-list-projects', async () => {
-    const { err, stdout } = await adb('shell ls /sdcard/Documents/Radcolour/projects')
+    const { err, stdout, stderr } = await adb('-d shell ls -1 /sdcard/Android/data/com.radcolour.myapplication/files/projects')
+    console.log('err:', err)
+    console.log('stdout:', JSON.stringify(stdout))
+    console.log('stderr:', JSON.stringify(stderr))
     if (err) return []
     return stdout.trim().split('\n').map(l => l.trim()).filter(l => l.length > 0)
 })
@@ -130,6 +133,17 @@ ipcMain.handle('show-save-choice-dialog', async () => {
     return result.response
 })
 
+ipcMain.handle('adb-get-device-name', async () => {
+    const { err, stdout } = await adb('devices')
+    if (err) return null
+    const lines = stdout.trim().split('\n').slice(1).filter(l => l.trim() && l.includes('\tdevice'))
+    if (lines.length === 0) return null
+    const serial = lines[0].split('\t')[0].trim()
+    const modelRes = await adbSerial(serial, 'shell getprop ro.product.model')
+    if (!modelRes.err && modelRes.stdout.trim()) return modelRes.stdout.trim()
+    return null
+})
+
 ipcMain.handle('adb-list-devices', async () => {
     const { err, stdout } = await adb('devices -l')
     if (err) return []
@@ -143,6 +157,7 @@ ipcMain.handle('adb-list-devices', async () => {
         const status = parts[1]
 
         if (!serial || !status) continue
+        if (serial.startsWith('emulator-')) continue
 
         const device = { serial, status, model: 'Unknown', androidVersion: 'Unknown' }
 
