@@ -1,6 +1,6 @@
 {
   "name": "radboard-companion",
-  "version": "1.0.0-alpha.3",
+  "version": "1.0.0",
   "description": "Radboard Companion — Chord Pack Editor and Project Manager",
   "main": "main.js",
 
