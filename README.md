@@ -2,9 +2,6 @@
 
 The Desktop App for [Radboard](https://github.com/RADCOLOUR/Radboard) which allows the creation of Project folders and .Radpack files. 
 
-RADBOARD COMPANION IS CURRENTLY IN A VERY BUGGY STATE, IT IS RECCOMENDED NOT TO DOWNLOAD UNTIL ALL BUGS ARE FIXED
-thanks :)
-
 Discord Coming Soon.
 
 Currently in development.
