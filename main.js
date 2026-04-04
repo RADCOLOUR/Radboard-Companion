@@ -178,3 +178,12 @@ ipcMain.handle('adb-list-devices', async () => {
 
     return devices
 })
+
+ipcMain.handle('adb-write-companion-ping', async () => {
+    const devicePath = '/sdcard/Android/data/com.radcolour.myapplication/files/companion_ping'
+    const tmp = path.join(app.getPath('temp'), 'companion_ping')
+    fs.writeFileSync(tmp, Date.now().toString())
+    const { err } = await adb(`push "${tmp}" "${devicePath}"`)
+    fs.unlinkSync(tmp)
+    return !err
+})
