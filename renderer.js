@@ -1,6 +1,7 @@
 const { ipcRenderer } = require('electron')
 const fs = require('fs')
 const path = require('path')
+const { version } = require('./package.json')
 
 let currentFolderPath = null
 let packChords = []
@@ -18,6 +19,7 @@ document.querySelectorAll('.tab').forEach(tab => {
         document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
         tab.classList.add('active')
         document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active')
+        document.getElementById('btnAbout').addEventListener('click', showAboutDialog)
     })
 })
 
@@ -1260,8 +1262,12 @@ function renderChordEditor(index) {
                 </div>
 
                 <div class="card" style="margin-bottom:16px;">
-                    <div class="card-header blue">Bass Positions</div>
-                    <div class="card-body" style="display:flex;flex-direction:column;gap:8px;" id="bassPositions">
+    <div class="card-header blue">Bass Positions</div>
+    <div style="margin:10px 16px 0;padding:8px 12px;background:rgba(255,228,122,0.08);border:1px solid rgba(255,228,122,0.3);border-radius:8px;display:flex;gap:8px;align-items:flex-start;">
+        <span style="font-size:13px;flex-shrink:0;">⚠️</span>
+        <span style="font-size:10px;color:var(--secondary);line-height:1.5;">Bass is ignored in versions 1.3.0 and above. If you are making a radpack file for those versions, please do not input any bass positions.</span>
+    </div>
+    <div class="card-body" style="display:flex;flex-direction:column;gap:8px;" id="bassPositions">
                         ${chord.bassPositions.map((pos, i) => `
                             <div style="display:flex;gap:8px;align-items:center;">
                                 <input class="bass-pos" type="text" value="${pos}" placeholder="e.g. x321 or 1332@1 barre:0-3" style="flex:1;font-family:monospace;"/>
@@ -1412,4 +1418,45 @@ function showChordEditorEmptyState() {
             <div class="empty-state-subtitle">Add a chord or open an existing .radpack file to get started</div>
         </div>
     `
+}
+
+function showAboutDialog() {
+    const overlay = document.createElement('div')
+    overlay.style.cssText = `
+        position:fixed;top:0;left:0;right:0;bottom:0;
+        background:rgba(0,0,0,0.7);
+        display:flex;align-items:center;justify-content:center;
+        z-index:1000;
+    `
+
+    overlay.innerHTML = `
+        <div style="background:var(--surface);border-radius:16px;border:1px solid var(--outline);padding:32px;width:360px;text-align:center;">
+            <div style="font-size:22px;font-weight:700;color:var(--primary);letter-spacing:0.05em;margin-bottom:4px;">Radboard Companion</div>
+            <div style="font-size:11px;color:var(--on-surface-variant);margin-bottom:24px;">v${version}</div>
+            <div style="width:40px;height:1px;background:var(--outline);margin:0 auto 24px;"></div>
+            <div style="font-size:12px;color:var(--on-surface-variant);margin-bottom:4px;">Made by</div>
+            <div style="font-size:14px;font-weight:600;color:var(--on-background);margin-bottom:24px;">Radcolour</div>
+           <button class="btn btn-ghost" id="btnGithubLink" style="font-size:11px;">GitHub</button>
+                <button class="btn btn-ghost" id="btnDiscordLink" style="font-size:11px;">Discord</button>
+            </div>
+            <div style="display:flex;justify-content:center;">
+    <button class="btn btn-ghost" id="btnCloseAbout" style="padding:8px 24px;">Close</button>
+</div>
+        </div>
+
+        
+    `
+
+    document.body.appendChild(overlay)
+
+    document.getElementById('btnCloseAbout').addEventListener('click', () => overlay.remove())
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove() })
+
+    document.getElementById('btnDiscordLink').addEventListener('click', () => {
+        require('electron').shell.openExternal('https://discord.gg/ZC8SVmEJEz')
+    })
+
+    document.getElementById('btnGithubLink').addEventListener('click', () => {
+    require('electron').shell.openExternal('https://github.com/RADCOLOUR/Radboard')
+})
 }
