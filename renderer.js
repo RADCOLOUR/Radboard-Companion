@@ -11,6 +11,7 @@ let deviceConnected = false
 let deviceProjects = []
 let connectedDeviceName = null
 let knownDeviceSerials = new Set()
+let companionPingInterval = null
 const DEVICE_PROJECTS_PATH = '/sdcard/Android/data/com.radcolour.myapplication/files/projects'
 
 document.querySelectorAll('.tab').forEach(tab => {
@@ -60,6 +61,21 @@ function showToast(message, color = 'var(--positive)') {
     }, 3000)
 }
 
+function startCompanionPing() {
+    if (companionPingInterval) return
+    ipcRenderer.invoke('adb-write-companion-ping')
+    companionPingInterval = setInterval(() => {
+        ipcRenderer.invoke('adb-write-companion-ping')
+    }, 3000)
+}
+
+function stopCompanionPing() {
+    if (companionPingInterval) {
+        clearInterval(companionPingInterval)
+        companionPingInterval = null
+    }
+}
+
 function startDevicePolling() {
     checkDevice()
     pollDevicesTab()
@@ -77,6 +93,7 @@ async function checkDevice() {
             await refreshDeviceProjects()
             showToast(`📱 ${connectedDeviceName || 'Device'} connected`)
             updateDeviceIndicator(true)
+            startCompanionPing()
         } else {
             connectedDeviceName = null
             deviceProjects = []
@@ -84,6 +101,7 @@ async function checkDevice() {
             renderDeviceProjectList()
             showToast('Device disconnected', 'var(--error)')
             updateDeviceIndicator(false)
+            stopCompanionPing()
         }
     }
 }
@@ -1262,12 +1280,12 @@ function renderChordEditor(index) {
                 </div>
 
                 <div class="card" style="margin-bottom:16px;">
-    <div class="card-header blue">Bass Positions</div>
-    <div style="margin:10px 16px 0;padding:8px 12px;background:rgba(255,228,122,0.08);border:1px solid rgba(255,228,122,0.3);border-radius:8px;display:flex;gap:8px;align-items:flex-start;">
-        <span style="font-size:13px;flex-shrink:0;">⚠️</span>
-        <span style="font-size:10px;color:var(--secondary);line-height:1.5;">Bass is ignored in versions 1.3.0 and above. If you are making a radpack file for those versions, please do not input any bass positions.</span>
-    </div>
-    <div class="card-body" style="display:flex;flex-direction:column;gap:8px;" id="bassPositions">
+                    <div class="card-header blue">Bass Positions</div>
+                    <div style="margin:10px 16px 0;padding:8px 12px;background:rgba(255,228,122,0.08);border:1px solid rgba(255,228,122,0.3);border-radius:8px;display:flex;gap:8px;align-items:flex-start;">
+                        <span style="font-size:13px;flex-shrink:0;">⚠️</span>
+                        <span style="font-size:10px;color:var(--secondary);line-height:1.5;">Bass is ignored in versions 1.3.0 and above. If you are making a radpack file for those versions, please do not input any bass positions.</span>
+                    </div>
+                    <div class="card-body" style="display:flex;flex-direction:column;gap:8px;" id="bassPositions">
                         ${chord.bassPositions.map((pos, i) => `
                             <div style="display:flex;gap:8px;align-items:center;">
                                 <input class="bass-pos" type="text" value="${pos}" placeholder="e.g. x321 or 1332@1 barre:0-3" style="flex:1;font-family:monospace;"/>
@@ -1436,15 +1454,14 @@ function showAboutDialog() {
             <div style="width:40px;height:1px;background:var(--outline);margin:0 auto 24px;"></div>
             <div style="font-size:12px;color:var(--on-surface-variant);margin-bottom:4px;">Made by</div>
             <div style="font-size:14px;font-weight:600;color:var(--on-background);margin-bottom:24px;">Radcolour</div>
-           <button class="btn btn-ghost" id="btnGithubLink" style="font-size:11px;">GitHub</button>
+            <div style="display:flex;justify-content:center;gap:8px;margin-bottom:24px;">
+                <button class="btn btn-ghost" id="btnGithubLink" style="font-size:11px;">GitHub</button>
                 <button class="btn btn-ghost" id="btnDiscordLink" style="font-size:11px;">Discord</button>
             </div>
             <div style="display:flex;justify-content:center;">
-    <button class="btn btn-ghost" id="btnCloseAbout" style="padding:8px 24px;">Close</button>
-</div>
+                <button class="btn btn-ghost" id="btnCloseAbout" style="padding:8px 24px;">Close</button>
+            </div>
         </div>
-
-        
     `
 
     document.body.appendChild(overlay)
@@ -1457,6 +1474,6 @@ function showAboutDialog() {
     })
 
     document.getElementById('btnGithubLink').addEventListener('click', () => {
-    require('electron').shell.openExternal('https://github.com/RADCOLOUR/Radboard')
-})
+        require('electron').shell.openExternal('https://github.com/RADCOLOUR/Radboard')
+    })
 }
