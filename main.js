@@ -99,8 +99,8 @@ ipcMain.handle('adb-list-projects', async () => {
 })
 
 ipcMain.handle('adb-read-file', async (event, devicePath) => {
-    const { err, stdout } = await adb(`shell cat "${devicePath}"`)
-    if (err) return null
+    const { stdout, stderr } = await adb(`-d shell cat "${devicePath}"`)
+    if (!stdout || stdout.trim().length === 0) return null
     return stdout
 })
 

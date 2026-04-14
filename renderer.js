@@ -649,12 +649,13 @@ async function loadDeviceProjectDetail(projName) {
     const progressionRaw = await ipcRenderer.invoke('adb-read-file', `${basePath}/progression.txt`)
 
     const info = {}
-    if (infoRaw) {
-        infoRaw.split('\n').forEach(line => {
-            const idx = line.indexOf('=')
-            if (idx >= 0) info[line.substring(0, idx).trim()] = line.substring(idx + 1).trim()
-        })
-    }
+if (infoRaw) {
+    infoRaw.split('\n').forEach(line => {
+        line = line.trim().replace(/\r/g, '')
+        const idx = line.indexOf('=')
+        if (idx >= 0) info[line.substring(0, idx).trim()] = line.substring(idx + 1).trim()
+    })
+}
 
     const notes = notesRaw || ''
 
