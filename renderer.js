@@ -3,6 +3,7 @@ const fs = require('fs')
 const path = require('path')
 const { version } = require('./package.json')
 
+
 let currentFolderPath = null
 let packChords = []
 let selectedChordIndex = -1

@@ -99,26 +99,30 @@ ipcMain.handle('adb-list-projects', async () => {
 })
 
 ipcMain.handle('adb-read-file', async (event, devicePath) => {
-    const { stdout, stderr } = await adb(`-d shell cat "${devicePath}"`)
-    if (!stdout || stdout.trim().length === 0) return null
+    const escapedPath = devicePath.replace(/ /g, '\\ ')
+    const { stdout, stderr, err } = await adb(`-d shell cat "${escapedPath}"`)
+    if (err || !stdout || stdout.trim().length === 0) {
+        console.warn(`adb-read-file failed for ${devicePath}:`, stderr || err?.message)
+        return null
+    }
     return stdout
 })
 
 ipcMain.handle('adb-write-file', async (event, devicePath, content) => {
     const tmp = path.join(app.getPath('temp'), 'radboard_tmp_' + Date.now() + '.txt')
     fs.writeFileSync(tmp, content)
-    const { err } = await adb(`push "${tmp}" "${devicePath}"`)
+    const { err } = await adb(`-d push "${tmp}" "${devicePath}"`)
     fs.unlinkSync(tmp)
     return !err
 })
 
 ipcMain.handle('adb-pull-file', async (event, devicePath, localPath) => {
-    const { err } = await adb(`pull "${devicePath}" "${localPath}"`)
+    const { err } = await adb(`-d pull "${devicePath}" "${localPath}"`)
     return !err
 })
 
 ipcMain.handle('adb-push-file', async (event, localPath, devicePath) => {
-    const { err } = await adb(`push "${localPath}" "${devicePath}"`)
+    const { err } = await adb(`-d push "${localPath}" "${devicePath}"`)
     return !err
 })
 
